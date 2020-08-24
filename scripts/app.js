@@ -41,6 +41,7 @@
         app.getSchedule(key, label);
         app.selectedTimetables.push({key: key, label: label});
         app.toggleAddDialog(false);
+        app.save();
     });
 
     document.getElementById('butAddCancel').addEventListener('click', function () {
@@ -141,7 +142,8 @@
             app.getSchedule(key);
         });
     };
-
+  
+  
     /*
      * Fake timetable data that is presented when the user first uses the app,
      * or when the user has not saved any stations. See startup code for more
@@ -167,6 +169,53 @@
 
 
     };
+  
+    app.save = function() {
+      if (window.indexedDB) {
+        var req = indexedDB.open("ratp-pwa", 1);
+        req.addEventListener("upgradeneeded", (ev) => {
+          const db = req.result;
+          db.createObjectStore("timetables", { keyPath: "key" });
+        });
+        req.addEventListener("success", () => {
+          var db = req.result;
+          var transaction = db.transaction(["timetables"], "readwrite");
+          var objectStore = transaction.objectStore("timetables");
+          objectStore.put({key: 'selectedTimetables', value: app.selectedTimetables});
+        });
+       }
+    }
+  
+    app.load = function() {
+      if (window.indexedDB) {
+        var req = indexedDB.open("ratp-pwa", 1);
+        req.addEventListener("upgradeneeded", (ev) => {
+          const db = req.result;
+          db.createObjectStore("timetables", { keyPath: "key" });
+        });
+        req.addEventListener("success", () => {
+          var db = req.result;
+          var transaction = db.transaction(["timetables"], "readonly");
+          var objectStore = transaction.objectStore("timetables");
+          var request = objectStore.get('selectedTimetables');
+          request.addEventListener("success", () => {
+            if (request.result) {
+              var selectedTimetables = request.result.value;
+              selectedTimetables.forEach(function (timetable) {
+                app.getSchedule(timetable.key, timetable.label);
+                app.selectedTimetables.push({key: timetable.key, label: timetable.label});
+              });
+            } else {
+              app.getSchedule('metros/1/bastille/A', 'Bastille, Direction La Défense');
+              app.selectedTimetables = [
+                  {key: initialStationTimetable.key, label: initialStationTimetable.label}
+              ];
+            }
+          });
+          
+        });
+       }
+    }
 
 
     /************************************************************************
@@ -179,9 +228,6 @@
      *   Instead, check out IDB (https://www.npmjs.com/package/idb) or
      *   SimpleDB (https://gist.github.com/inexorabletash/c8069c042b734519680c)
      ************************************************************************/
-
-    app.getSchedule('metros/1/bastille/A', 'Bastille, Direction La Défense');
-    app.selectedTimetables = [
-        {key: initialStationTimetable.key, label: initialStationTimetable.label}
-    ];
+  
+    app.load();
 })();
